@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, Tuple
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, FSInputFile
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode, ChatAction
@@ -168,16 +168,21 @@ from aiogram.enums import ChatAction # Добавьте этот импорт в
 async def finish_quiz(target: Message | CallbackQuery):
     user_id = target.from_user.id
     s = get_session(user_id)
-    result_text, score = compute_result(s.variant_id, s.answers)
+    _, score = compute_result(s.variant_id, s.answers)
 
     msg_obj = target.message if isinstance(target, CallbackQuery) else target
-    bot = msg_obj.bot # Получаем объект бота для вызова действий
-    
-    # 1. Отправляем расшифровку результата
-    await msg_obj.answer(f"📌 Расшифровка → Результат\n\n{result_text}")
+    bot = msg_obj.bot
+
+    # 1. Отправляем кружочек с результатом
+    if score <= 5:
+        video_file = "0-5.mp4"
+    elif score <= 10:
+        video_file = "6-10.mp4"
+    else:
+        video_file = "Последнее.mp4"
+    await msg_obj.answer_video_note(video_note=FSInputFile(video_file))
 
     # 2. Включаем статус "печатает..."
-    # Он будет отображаться в заголовке чата
     await bot.send_chat_action(chat_id=user_id, action=ChatAction.TYPING)
 
     # 3. Делаем паузу (например, 3 секунды)
@@ -186,8 +191,7 @@ async def finish_quiz(target: Message | CallbackQuery):
     # 4. Отправляем финальное сообщение с кнопками
     final_text = AFTER_RESULT_LOW_SCORE_TEXT if score < 11 else "Хочешь прокачать живую речь ещё сильнее? 👇"
     await msg_obj.answer(final_text, reply_markup=kb_after_test())
-    
-    # Сброс сессии
+
     SESSIONS[user_id] = UserSession()
 
 # ================== HANDLERS ==================
@@ -196,23 +200,13 @@ dp = Dispatcher()
 @dp.message(CommandStart())
 async def cmd_start(message: Message):
     SESSIONS[message.from_user.id] = UserSession()
-    
-    text = (
-        "Привет! 👋\n\n"
-        "Бывает такое: вроде учишь английский годами, знаешь правила, но в разговоре "
-        "чувствуешь себя роботом? 🤖\n\n"
-        "Этот тест не про скучную грамматику. Он про то, как вы звучите в реальной жизни — "
-        "там, где люди смеются, спорят и выражают эмоции.\n\n"
-        "Здесь нет «ошибок». Есть только выбор: звучать как сухой учебник или как живой человек.\n\n"
-        "В конце ты узнаешь свой результат и поймешь, почему речь может звучать «плоско», "
-        "даже если в ней нет грамматических ошибок.\n\n"
-        "Готов(а) проверить себя? 👇"
-    )
-    
+
+    video = FSInputFile("Приветствие.mp4")
+    await message.answer_video_note(video_note=video)
+
     kb = InlineKeyboardBuilder()
     kb.button(text="🚀 Начать тест", callback_data="start_quiz")
-    
-    await message.answer(text, reply_markup=kb.as_markup())
+    await message.answer("Готов(а) проверить себя? 👇", reply_markup=kb.as_markup())
 
 @dp.callback_query(F.data == "start_quiz")
 async def on_start_quiz(call: CallbackQuery):
