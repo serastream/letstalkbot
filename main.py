@@ -168,12 +168,19 @@ from aiogram.enums import ChatAction # Добавьте этот импорт в
 async def finish_quiz(target: Message | CallbackQuery):
     user_id = target.from_user.id
     s = get_session(user_id)
-    _, score = compute_result(s.variant_id, s.answers)
+    result_text, score = compute_result(s.variant_id, s.answers)
 
     msg_obj = target.message if isinstance(target, CallbackQuery) else target
     bot = msg_obj.bot
 
-    # 1. Отправляем кружочек с результатом
+    # 1. Отправляем текст результата
+    await msg_obj.answer(result_text)
+
+    # 2. Показываем "печатает..." перед кружочком
+    await bot.send_chat_action(chat_id=user_id, action=ChatAction.TYPING)
+    await asyncio.sleep(3)
+
+    # 3. Отправляем кружочек с результатом
     if score <= 5:
         video_file = "0-5.mp4"
     elif score <= 10:
@@ -182,15 +189,12 @@ async def finish_quiz(target: Message | CallbackQuery):
         video_file = "Последнее.mp4"
     await msg_obj.answer_video_note(video_note=FSInputFile(video_file))
 
-    # 2. Включаем статус "печатает..."
+    # 4. Показываем "печатает..." перед финальным сообщением
     await bot.send_chat_action(chat_id=user_id, action=ChatAction.TYPING)
-
-    # 3. Делаем паузу (например, 3 секунды)
     await asyncio.sleep(3)
 
-    # 4. Отправляем финальное сообщение с кнопками
-    final_text = AFTER_RESULT_LOW_SCORE_TEXT if score < 11 else "Хочешь прокачать живую речь ещё сильнее? 👇"
-    await msg_obj.answer(final_text, reply_markup=kb_after_test())
+    # 5. Отправляем кнопки
+    await msg_obj.answer("👇", reply_markup=kb_after_test())
 
     SESSIONS[user_id] = UserSession()
 
